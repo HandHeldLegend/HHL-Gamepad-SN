@@ -71,8 +71,8 @@ uint32_t regread_high = 0;
 // Reboot system properly.
 void enter_reboot()
 {
-    led_animator_send(LEDANIM_FADETO, COLOR_BLACK);
-    vTaskDelay(250/portTICK_PERIOD_MS);
+    led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
+    vTaskDelay(500/portTICK_PERIOD_MS);
     util_battery_set_charge_rate(35);
     esp_restart();
 }
@@ -80,8 +80,8 @@ void enter_reboot()
 // Sleep mode should check the charge level every 30 seconds or so. 
 void enter_sleep()
 {
-    led_animator_send(LEDANIM_FADETO, COLOR_BLACK);
-    vTaskDelay(250/portTICK_PERIOD_MS);
+    led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
+    vTaskDelay(500/portTICK_PERIOD_MS);
     util_battery_enable_ship_mode();
 }
 
@@ -89,14 +89,14 @@ void enter_sleep()
 void enter_hid()
 {
     GPIO.out_w1tc = USB_GPIO_MASK;
-    vTaskDelay(150/portTICK_PERIOD_MS);
+    vTaskDelay(10/portTICK_PERIOD_MS);
     // Hold USB Line high, which holds C2D high causing USB bootloader bypass on EFM8UB1
     GPIO.out_w1ts = 1<<USB_GPIO_LINE_EN;
-    vTaskDelay(150/portTICK_PERIOD_MS);
+    vTaskDelay(10/portTICK_PERIOD_MS);
     // Set HID high which releases the 'reset' line for the EFM8UB1
     GPIO.out_w1ts = 1<<USB_GPIO_HID_EN;
-    //Delay 500ms
-    vTaskDelay(150/portTICK_PERIOD_MS);
+    //Delay 10ms
+    vTaskDelay(10/portTICK_PERIOD_MS);
     // Set USB Line active
     GPIO.out_w1tc = 1<<USB_GPIO_LINE_EN;
 }
@@ -363,6 +363,9 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                     hoja_settings_saveall();
                 }
             }
+
+            boot_anim();
+            led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
             
             // Get boot mode and it will perform a callback.
             err = util_battery_boot_status();
@@ -394,23 +397,23 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
         {
             if (param == 1)
             {
-                led_animator_send(LEDANIM_FADETO, COLOR_RED);
+                led_animator_single(LEDANIM_FADETO, COLOR_RED);
             }
             else if (param == 2)
             {
-                led_animator_send(LEDANIM_FADETO, COLOR_BLUE);
+                led_animator_single(LEDANIM_FADETO, COLOR_BLUE);
             }
             else if (param == 3)
             {
-                led_animator_send(LEDANIM_FADETO, COLOR_GREEN);
+                led_animator_single(LEDANIM_FADETO, COLOR_GREEN);
             }
             else if (param == 4)
             {
-                led_animator_send(LEDANIM_FADETO, COLOR_PURPLE);
+                led_animator_single(LEDANIM_FADETO, COLOR_PURPLE);
             }
             else
             {
-                led_animator_send(LEDANIM_FADETO, COLOR_ORANGE);
+                led_animator_single(LEDANIM_FADETO, COLOR_ORANGE);
             }
 
         }
@@ -454,7 +457,7 @@ void local_bt_evt(hoja_bt_event_t evt)
 
         case HEVT_BT_CONNECTED:
             ESP_LOGI(TAG, "BT Device Connected.");
-            led_animator_send(LEDANIM_FADETO, mode_color);
+            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
             break;
 
         case HEVT_BT_DISCONNECTED:
@@ -470,20 +473,16 @@ void local_usb_evt(hoja_usb_event_t evt)
     {
         default:
         case HEVT_USB_DISCONNECTED:
-            if (hoja_get_external_power())
+            if (util_battery_has_external_power())
             {
                 charge_display = true;
-                led_animator_send(LEDANIM_BATTERY_BREATHE, charge_color);
-            }
-            else
-            {
-                enter_sleep();
+                led_animator_single(LEDANIM_BLINK_SLOW, charge_color);
             }
             break;
 
         case HEVT_USB_CONNECTED:
             charge_display = false;
-            led_animator_send(LEDANIM_FADETO, mode_color);
+            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
             break;
     }
 }
@@ -503,14 +502,16 @@ void local_wired_evt(hoja_wired_event_t evt)
         
         case HEVT_WIRED_SNES_DETECT:
             hoja_set_core(HOJA_CORE_SNES);
-            led_animator_send(LEDANIM_FADETO, COLOR_WHITE);
+            mode_color_array_ptr = COLOR_PRESET_SFC;
+            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
             err = hoja_start_core();
 
             break;
 
         case HEVT_WIRED_JOYBUS_DETECT:
             hoja_set_core(HOJA_CORE_GC);
-            led_animator_send(LEDANIM_FADETO, COLOR_PURPLE);
+            mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
+            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
             err = hoja_start_core();
 
             break;
@@ -538,28 +539,16 @@ void local_battery_evt(hoja_battery_event_t evt, uint8_t param)
         case HEVT_BATTERY_CHARGING:
             ESP_LOGI(TAG, "Battery is charging.");
             charge_color.rgb = COLOR_GREEN.rgb;
-            if(charge_display)
-            {
-                led_animator_send(LEDANIM_BATTERY_BREATHE, charge_color);
-            }
             break;
 
         case HEVT_BATTERY_CHARGECOMPLETE:
             ESP_LOGI(TAG, "Battery charging completed.");
             charge_color.rgb = COLOR_BLUE.rgb;
-            if(charge_display)
-            {
-                led_animator_send(LEDANIM_BATTERY_BREATHE, charge_color);
-            }
             break;
 
         case HEVT_BATTERY_NOCHARGE:
             ESP_LOGI(TAG, "Battery not charging.");
             charge_color.rgb = COLOR_RED.rgb;
-            if(charge_display)
-            {
-                led_animator_send(LEDANIM_BATTERY_BREATHE, charge_color);
-            }
             break;
 
         default:
@@ -567,6 +556,11 @@ void local_battery_evt(hoja_battery_event_t evt, uint8_t param)
             // Not implemented
             ESP_LOGE(TAG, "Not implemented.");
             break;
+    }
+
+    if(charge_display)
+    {
+        led_animator_single(LEDANIM_BLINK_SLOW, charge_color);
     }
 }
 
@@ -577,12 +571,9 @@ void local_charger_evt(hoja_charger_event_t evt)
     {
         case HEVT_CHARGER_PLUGGED:
             ESP_LOGI(TAG, "Charger plugged in.");
-            if(charge_display)
-            {
-                led_animator_send(LEDANIM_BATTERY_BREATHE, charge_color);
-            }
             break;
         case HEVT_CHARGER_UNPLUGGED:
+            charge_display = false;
             ESP_LOGI(TAG, "Charger unplugged.");
             enter_sleep();
             break;
@@ -603,20 +594,19 @@ void local_boot_evt(hoja_boot_event_t evt)
         {
             ESP_LOGI(TAG, "Plugged in on boot.");
             enter_hid();
-            charge_display = true;
 
             switch(loaded_settings.controller_mode)
             {
                 case HOJA_CONTROLLER_MODE_RETRO:
                 {
-                    charge_display = false;
                     util_battery_set_charge_rate(35);
 
                     err = util_wired_detect_loop();
                     if (!err)
                     {
                         ESP_LOGI(TAG, "Started wired retro loop OK.");
-                        led_animator_send(LEDANIM_BLINK, COLOR_ORANGE);
+                        mode_color.rgb = COLOR_ORANGE.rgb;
+                        led_animator_single(LEDANIM_BLINK_FAST, mode_color);
                     }
                     else
                     {
@@ -633,7 +623,7 @@ void local_boot_evt(hoja_boot_event_t evt)
                     core_usb_set_subcore(USB_SUBCORE_DINPUT);
 
                     mode_color.rgb = COLOR_BLUE.rgb;
-                    led_animator_send(LEDANIM_FADETO, mode_color);
+                    mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
 
                     err = hoja_start_core();
 
@@ -655,8 +645,8 @@ void local_boot_evt(hoja_boot_event_t evt)
                     hoja_set_core(HOJA_CORE_USB);
                     core_usb_set_subcore(USB_SUBCORE_XINPUT);
 
+                    mode_color_array_ptr = COLOR_PRESET_XBOX;
                     mode_color.rgb = COLOR_GREEN.rgb;
-                    led_animator_send(LEDANIM_FADETO, mode_color);
 
                     err = hoja_start_core();
 
@@ -674,8 +664,8 @@ void local_boot_evt(hoja_boot_event_t evt)
                     hoja_set_core(HOJA_CORE_USB);
                     core_usb_set_subcore(USB_SUBCORE_NS);
 
+                    mode_color_array_ptr = COLOR_PRESET_SWITCH;
                     mode_color.rgb = COLOR_YELLOW.rgb;
-                    led_animator_send(LEDANIM_FADETO, mode_color);
 
                     err = hoja_start_core();
 
@@ -691,30 +681,28 @@ void local_boot_evt(hoja_boot_event_t evt)
                 }
                     break;
             }
-
             // Start battery monitor utility
             util_battery_start_monitor();
 
-            vTaskDelay(200/portTICK_PERIOD_MS);
-            if(charge_display)
+            if((!usb_is_connected()) && (loaded_settings.controller_mode != HOJA_CONTROLLER_MODE_RETRO))
             {
-                uint8_t stat = util_battery_is_charging();
+                charge_display = true;
+                uint8_t stat = util_battery_get_charging_status();
                 if (!stat)
                 {
                     charge_color.rgb = COLOR_RED.rgb;
-                    led_animator_send(LEDANIM_BATTERY_BREATHE, charge_color);
                 }
                 else if (stat==1)
                 {
                     charge_color.rgb = COLOR_GREEN.rgb;
-                    led_animator_send(LEDANIM_BATTERY_BREATHE, charge_color);
                 }
                 else if(stat>1)
                 {
                     charge_color.rgb = COLOR_BLUE.rgb;
-                    led_animator_send(LEDANIM_BATTERY_BREATHE, charge_color);
                 }
+                led_animator_single(LEDANIM_BLINK_SLOW, charge_color);
             }
+            
             
         }
             break;
@@ -724,8 +712,6 @@ void local_boot_evt(hoja_boot_event_t evt)
         case HEVT_BOOT_UNPLUGGED:
         {
             ESP_LOGI(TAG, "Unplugged.");
-            // Do not show charger display changes.
-            charge_display = false;
 
             if (hoja_get_force_wired())
             {
@@ -744,7 +730,8 @@ void local_boot_evt(hoja_boot_event_t evt)
                     if (!err)
                     {
                         ESP_LOGI(TAG, "Started wired retro loop OK.");
-                        led_animator_send(LEDANIM_BLINK, COLOR_ORANGE);
+                        mode_color.rgb = COLOR_ORANGE.rgb;
+                        led_animator_single(LEDANIM_BLINK_FAST, mode_color);
                     }
                     else
                     {
@@ -761,7 +748,8 @@ void local_boot_evt(hoja_boot_event_t evt)
                     err = hoja_set_core(HOJA_CORE_BT_DINPUT);
 
                     mode_color.rgb = COLOR_BLUE.rgb;
-                    led_animator_send(LEDANIM_BLINK, mode_color);
+                    mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
+                    led_animator_single(LEDANIM_BLINK_FAST, mode_color);
 
                     err = hoja_start_core();
 
@@ -782,8 +770,9 @@ void local_boot_evt(hoja_boot_event_t evt)
                     core_ns_set_subcore(NS_TYPE_SNES);
                     err = hoja_set_core(HOJA_CORE_NS);
 
+                    mode_color_array_ptr = COLOR_PRESET_SWITCH;
                     mode_color.rgb = COLOR_YELLOW.rgb;
-                    led_animator_send(LEDANIM_BLINK, mode_color);
+                    led_animator_single(LEDANIM_BLINK_FAST, mode_color);
 
                     err = hoja_start_core();
 
@@ -803,8 +792,9 @@ void local_boot_evt(hoja_boot_event_t evt)
                     util_battery_set_charge_rate(100);
                     err = hoja_set_core(HOJA_CORE_BT_XINPUT);
 
+                    mode_color_array_ptr = COLOR_PRESET_XBOX;
                     mode_color.rgb = COLOR_GREEN.rgb;
-                    led_animator_send(LEDANIM_BLINK, mode_color);
+                    led_animator_single(LEDANIM_BLINK_FAST, mode_color);
 
                     err = hoja_start_core();
 
@@ -897,7 +887,6 @@ void app_main()
 
     GPIO.out_w1ts = GPIO_INPUT_CLEAR0_MASK;
     GPIO.out1_w1ts.val = (uint32_t) 0x3;
-    
 
     // Set up ADC
     ESP_ERROR_CHECK(adc1_config_width(ADC_WIDTH_BIT_DEFAULT));

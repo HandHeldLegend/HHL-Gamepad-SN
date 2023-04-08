@@ -1,16 +1,58 @@
 #include "leds.h"
 
+// Public vars
+//-------------//
+
 // Variable to hold current color data
-rgb_s led_colors[CONFIG_NP_RGB_COUNT] = {0};
+rgb_s led_colors[CONFIG_NP_RGB_COUNT]       = {0};
+
+// Current LED task status
 led_anim_status_t led_anim_status = LA_STATUS_IDLE;
 
+// Current mode color(s)
 rgb_s mode_color    = {0};
+
+
+// Store charge mode color
 rgb_s charge_color  = COLOR_GREEN;
 
-TaskHandle_t led_taskHandle;
-QueueHandle_t led_xQueue;
 
-led_msg_s led_msg = {0};
+// Color preset defs
+// preset order: right, down, up, left, start, select, dpad x4
+rgb_s COLOR_PRESET_SFC[10] = {{.rgb = 0xC1121C}, {.rgb = 0xF7BA0B}, {.rgb = 0x00387b}, {.rgb = 0x007243},
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, 
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}};
+
+rgb_s COLOR_PRESET_XBOX[10] = {{.rgb = 0xC1121C}, {.rgb = 0x007243}, {.rgb = 0xF7BA0B}, {.rgb = 0x00387b},
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, 
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}};
+
+rgb_s COLOR_PRESET_SWITCH[10] = {{.rgb = 0xC1121C}, {.rgb = 0xF7BA0B}, {.rgb = 0x00387b}, {.rgb = 0x007243},
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, 
+                              {.rgb = 0xC1121C}, {.rgb = 0xF7BA0B}, {.rgb = 0x00387b}, {.rgb = 0x007243}};
+
+rgb_s COLOR_PRESET_DOLPHIN[10] = {{.rgb = 0x3ac9af}, {.rgb = 0xe63939}, {.rgb = 0x54585a}, {.rgb = 0x54585a},
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, 
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}};
+
+rgb_s *mode_color_array_ptr = COLOR_PRESET_SFC;
+//-------------//
+//-------------//
+
+// Private vars
+//-------------//
+
+TaskHandle_t    _led_taskHandle;
+QueueHandle_t   _led_xQueue;
+// Use to store information passed through events
+led_msg_s   _led_msg = {0};
+rgb_s       _msg_colors[CONFIG_NP_RGB_COUNT] = {0};
+
+// Store previous colors
+rgb_s _previous_colors[CONFIG_NP_RGB_COUNT]  = {0};
+
+//-------------//
+//-------------//
 
 // LED boot animation
 void boot_anim()
@@ -21,7 +63,7 @@ void boot_anim()
     uint8_t color_idx = 0;
     uint8_t color_last_idx = 0;
     rgb_s colors[6] = {COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, COLOR_GREEN, COLOR_BLUE, COLOR_PURPLE};
-    for(int i = 0; i < 12; i++)
+    for(int i = 0; i < 36; i++)
     {
         memset(led_colors, 0x00, sizeof(led_colors));
         led_colors[back_forth] = colors[color_idx];
@@ -81,29 +123,79 @@ void boot_anim()
         }
 
         rgb_show();
-        vTaskDelay(100/portTICK_PERIOD_MS);
+        vTaskDelay(35/portTICK_PERIOD_MS);
     }
-    rgb_setall(COLOR_BLACK);
+
+}
+
+void led_set_all(rgb_s * led_array, uint32_t color)
+{
+    for (uint8_t i = 0; i < CONFIG_NP_RGB_COUNT; i++)
+    {
+        led_array[i].rgb = color;
+    }
+}
+
+void led_array_fade(rgb_s * blend_to, uint8_t speed)
+{
+    uint8_t fader = 0;
+    uint8_t _speed = 10;
+    if (speed != NULL)
+    {
+        _speed = speed;
+    }
+    
+    memcpy(_previous_colors, led_colors, sizeof(led_colors));
+
+    while(fader < 30)
+    {
+        uint8_t t = 0;
+        if ((8 * fader) > 255)
+        {
+            t = 255;
+        }
+        else
+        {
+            t = (8 * fader);
+        }
+        for(uint8_t i = 0; i < CONFIG_NP_RGB_COUNT; i++)
+        {
+            rgb_blend(&led_colors[i], _previous_colors[i], blend_to[i], t);
+        }
+        rgb_show();
+        fader += 1;
+        vTaskDelay(_speed/portTICK_PERIOD_MS);
+    }
+    memcpy(led_colors, blend_to, sizeof(led_colors));
     rgb_show();
 }
 
+// Blinks to a color, then back to the original color.
+void led_blink(rgb_s * led_array, uint8_t speed)
+{
+    uint8_t _speed = 10;
+    if (speed != NULL)
+    {
+        _speed = speed;
+    }
+
+    rgb_s _origin_colors[CONFIG_NP_RGB_COUNT] = {0};
+    memcpy(_origin_colors, led_colors, sizeof(led_colors));
+
+    led_array_fade(led_array, _speed);
+    led_array_fade(_origin_colors, _speed);
+}   
+
 void led_animator_task(void * params)
 {
-    led_msg_s received_led_msg = {0};
+    led_msg_s _received_led_msg = {0};
 
-    rgb_s last_color = {0};
-    rgb_s current_color = {0};
-    rgb_s next_color = {0};
-
-    rgb_s blinkfrom_color = {0};
-    rgb_s blinkto_color = {0};
-    uint32_t blink_speed = 10;
-
+    uint32_t    _blink_speed = 10;
     // Used to determine if blink should keep repeating.
-    bool blinking_en = false;
+    bool        _blinking_en = false;
 
-    led_xQueue = xQueueCreate(4, sizeof(led_msg_s));
-    if (led_xQueue != 0)
+    _led_xQueue = xQueueCreate(4, sizeof(led_msg_s));
+    if (_led_xQueue != 0)
     {
         led_anim_status = LA_STATUS_READY;
     }
@@ -111,128 +203,53 @@ void led_animator_task(void * params)
     for(;;)
     {
         // Check if we are supposed to be blinking color
-        if (blinking_en)
+        if (_blinking_en)
         {
-            // We already blinked TO the desired color, so we must blink back.
-            uint8_t fader = 0;
-            uint8_t t = 0;
-            next_color.rgb = blinkto_color.rgb;
-            while(fader < 30)
-            {
-                
-                if ((8 * fader) > 255)
-                {
-                    t = 255;
-                }
-                else
-                {
-                    t = (8 * fader);
-                }
-                rgb_blend(&current_color, last_color, next_color, t);
-                rgb_setall(current_color);
-                rgb_show();
-                fader += 1;
-                vTaskDelay(blink_speed/portTICK_PERIOD_MS);
-            }
-            last_color.rgb = next_color.rgb;
-            rgb_setall(next_color);
-            rgb_show();
-
-            // We already blinked TO the desired color, so we must blink back.
-            fader = 0;
-            next_color.rgb = blinkfrom_color.rgb;
-            while(fader < 30)
-            {
-                t = 0;
-                if ((8 * fader) > 255)
-                {
-                    t = 255;
-                }
-                else
-                {
-                    t = (8 * fader);
-                }
-                rgb_blend(&current_color, last_color, next_color, t);
-                rgb_setall(current_color);
-                rgb_show();
-                fader += 1;
-                vTaskDelay(blink_speed/portTICK_PERIOD_MS);
-            }
-            last_color.rgb = next_color.rgb;
-            rgb_setall(next_color);
-            rgb_show();
+            led_blink(_msg_colors, _blink_speed);
         }
         // If a message is received
-        if (xQueueReceive(led_xQueue, &(received_led_msg), (TickType_t) 0))
+        if (xQueueReceive(_led_xQueue, &(_received_led_msg), (TickType_t) 0))
         {
             // Disable blinking until we interpret message.
 
-            blinking_en = false;
-            rgb_s msg_color = {
-                .rgb = received_led_msg.rgb_color,
-            };
+            _blinking_en = false;
 
-            switch(received_led_msg.anim_type)
+            if (_received_led_msg.single)
             {
-                case LEDANIM_SNAPTO:
-                    current_color.rgb   = msg_color.rgb;
-                    last_color.rgb      = msg_color.rgb;
-                    rgb_setall(msg_color);
-                    rgb_show();
-                    break;
+                led_set_all(_msg_colors, _received_led_msg.color_hex);
+            }
+            else
+            {
+                memcpy(_msg_colors, _received_led_msg.color_ptr, sizeof(_msg_colors));
+            }
 
-                case LEDANIM_BLINK:
-                    // Here we need to blink TO the desired color
-                    // not before we store our original color
-                    blinkfrom_color.rgb = current_color.rgb;
-                    blinkto_color.rgb = msg_color.rgb;
-                    blink_speed = 10;
-                    blinking_en = true;
-                    break;
-
+            switch(_received_led_msg.anim_type)
+            {
+                default:
                 case LEDANIM_FADETO:
-
-                    uint8_t fader = 0;
-                    next_color.rgb = msg_color.rgb;
-                    blink_speed = 10;
-                    while(fader < 30)
-                    {
-                        uint8_t t = 0;
-                        if ((8 * fader) > 255)
-                        {
-                            t = 255;
-                        }
-                        else
-                        {
-                            t = (8 * fader);
-                        }
-                        rgb_blend(&current_color, last_color, next_color, t);
-                        rgb_setall(current_color);
-                        rgb_show();
-                        fader += 1;
-                        vTaskDelay(10/portTICK_PERIOD_MS);
-                    }
-                    last_color.rgb = next_color.rgb;
-                    rgb_setall(next_color);
-                    rgb_show();
-
+                    _blink_speed = 10;
+                    led_array_fade(_msg_colors, _blink_speed);
                     break;
 
-                case LEDANIM_BATTERY_BREATHE:
+                case LEDANIM_BLINK_SLOW:
                     // Here we need to blink TO the desired color
                     // not before we store our original color
-                    blink_speed = 30;
-                    blinkfrom_color.rgb = COLOR_BLACK.rgb;
-                    blinkto_color.rgb = msg_color.rgb;
+                    _blink_speed = 45;
+                    _blinking_en = true;
+                    led_blink(_msg_colors, _blink_speed);
+                    break;
 
-                    blinking_en = true;
+                case LEDANIM_BLINK_FAST:
+                    _blink_speed = 10;
+                    _blinking_en = true;
+                    led_blink(_msg_colors, _blink_speed);
                     break;
             }
         }
-        else if (!blinking_en)
+        else if (!_blinking_en)
         {
-            // Offload for 500ms
-            vTaskDelay(500/portTICK_PERIOD_MS);
+            // Offload for 350
+            vTaskDelay(150/portTICK_PERIOD_MS);
         }
     }
 }
@@ -240,23 +257,43 @@ void led_animator_task(void * params)
 void led_animator_init(void)
 {
     neopixel_init(led_colors, VSPI_HOST);
-    rgb_setbrightness(25);
+    rgb_setbrightness(100);
 
-    xTaskCreatePinnedToCore(led_animator_task, "LED Animator", 2048, NULL, 3, &led_taskHandle, HOJA_CORE_CPU);
+    xTaskCreatePinnedToCore(led_animator_task, "LED Animator", 2048, NULL, 3, &_led_taskHandle, HOJA_CORE_CPU);
 }
 
-void led_animator_send(led_anim_t anim_type, rgb_s rgb_color)
+// Animate to a single color
+void led_animator_single(led_anim_t anim_type, rgb_s rgb_color)
 {
     if (led_anim_status == LA_STATUS_IDLE)
     {
         return;
     }
 
-    led_msg.anim_type = anim_type;
-    led_msg.rgb_color = rgb_color.rgb;
+    _led_msg.single = true;
+    _led_msg.color_hex = rgb_color.rgb;
+    _led_msg.anim_type = anim_type;
 
-    if (led_xQueue != 0)
+    if (_led_xQueue != 0)
     {
-        xQueueSend(led_xQueue, &led_msg, (TickType_t) 0);
+        xQueueSend(_led_xQueue, &_led_msg, (TickType_t) 0);
+    }
+}
+
+// Animate to array of colors
+void led_animator_array(led_anim_t anim_type, rgb_s * rgb_color_array)
+{
+    if (led_anim_status == LA_STATUS_IDLE)
+    {
+        return;
+    }
+
+    _led_msg.single = false;
+    _led_msg.color_ptr = rgb_color_array;
+    _led_msg.anim_type = anim_type;
+
+    if (_led_xQueue != 0)
+    {
+        xQueueSend(_led_xQueue, &_led_msg, (TickType_t) 0);
     }
 }

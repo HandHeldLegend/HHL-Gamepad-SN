@@ -7,18 +7,23 @@
 
 extern rgb_s led_colors[CONFIG_NP_RGB_COUNT];
 extern rgb_s mode_color;
+extern rgb_s *mode_color_array_ptr;
 extern rgb_s charge_color;
+
+// color presets
+extern rgb_s COLOR_PRESET_SFC[10];
+extern rgb_s COLOR_PRESET_XBOX[10];
+extern rgb_s COLOR_PRESET_SWITCH[10];
+extern rgb_s COLOR_PRESET_DOLPHIN[10];
 
 typedef enum
 {
-    // Instantly change to a color
-    LEDANIM_SNAPTO,
-    // Fade to a color
+    // Fade to a color once
     LEDANIM_FADETO,
-    // Blink from previous color to new color and back
-    LEDANIM_BLINK,
+    // Sync breathing fader
+    LEDANIM_BLINK_FAST,
     // Battery breathing fader
-    LEDANIM_BATTERY_BREATHE,
+    LEDANIM_BLINK_SLOW,
 } led_anim_t;
 
 typedef enum
@@ -30,7 +35,9 @@ typedef enum
 typedef struct
 {
     led_anim_t  anim_type;
-    uint32_t    rgb_color;
+    bool        single;
+    uint32_t    color_hex;
+    rgb_s       *color_ptr;
 } led_msg_s;
 
 extern led_anim_status_t led_anim_status;
@@ -39,6 +46,7 @@ void boot_anim(void);
 
 void led_animator_init(void);
 
-void led_animator_send(led_anim_t anim_type, rgb_s rgb_color);
+void led_animator_single(led_anim_t anim_type, rgb_s rgb_color);
+void led_animator_array(led_anim_t anim_type, rgb_s * rgb_color_array);
 
 #endif
