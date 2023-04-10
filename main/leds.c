@@ -257,7 +257,7 @@ void led_animator_task(void * params)
 void led_animator_init(void)
 {
     neopixel_init(led_colors, VSPI_HOST);
-    rgb_setbrightness(100);
+    rgb_setbrightness(75);
 
     xTaskCreatePinnedToCore(led_animator_task, "LED Animator", 2048, NULL, 3, &_led_taskHandle, HOJA_CORE_CPU);
 }

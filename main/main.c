@@ -393,29 +393,31 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
             break;
 
         case HEVT_API_PLAYERNUM:
-            // TO DO
         {
+            rgb_s col_tmp = {0};
             if (param == 1)
             {
-                led_animator_single(LEDANIM_FADETO, COLOR_RED);
+                col_tmp.rgb = COLOR_RED.rgb;
             }
             else if (param == 2)
             {
-                led_animator_single(LEDANIM_FADETO, COLOR_BLUE);
+                col_tmp.rgb = COLOR_BLUE.rgb;
             }
             else if (param == 3)
             {
-                led_animator_single(LEDANIM_FADETO, COLOR_GREEN);
+                col_tmp.rgb = COLOR_GREEN.rgb;
             }
             else if (param == 4)
             {
-                led_animator_single(LEDANIM_FADETO, COLOR_PURPLE);
+                col_tmp.rgb = COLOR_PURPLE.rgb;
             }
             else
             {
-                led_animator_single(LEDANIM_FADETO, COLOR_ORANGE);
+                col_tmp.rgb = COLOR_ORANGE.rgb;
             }
-
+            mode_color_array_ptr[4].rgb = col_tmp.rgb;
+            mode_color_array_ptr[5].rgb = col_tmp.rgb;
+            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
         }
             break;
 
