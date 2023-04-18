@@ -307,6 +307,8 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                 hoja_set_force_wired(false);
             }
 
+            bool save_flag = false;
+
             // Enable USB Program Mode
             if (hoja_button_data.trigger_l && hoja_button_data.trigger_r)
             {
@@ -336,7 +338,7 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                 if (loaded_settings.controller_mode != HOJA_CONTROLLER_MODE_RETRO)
                 {
                     loaded_settings.controller_mode = HOJA_CONTROLLER_MODE_RETRO;
-                    hoja_settings_saveall();
+                    save_flag = true;
                 }
             }
             else if (hoja_button_data.button_right)
@@ -344,7 +346,7 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                 if (loaded_settings.controller_mode != HOJA_CONTROLLER_MODE_NS)
                 {
                     loaded_settings.controller_mode = HOJA_CONTROLLER_MODE_NS;
-                    hoja_settings_saveall();
+                    save_flag = true;
                 }
             }
             else if (hoja_button_data.button_up)
@@ -352,7 +354,7 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                 if (loaded_settings.controller_mode != HOJA_CONTROLLER_MODE_XINPUT)
                 {
                     loaded_settings.controller_mode = HOJA_CONTROLLER_MODE_XINPUT;
-                    hoja_settings_saveall();
+                    save_flag = true;
                 }
             }
             else if (hoja_button_data.button_down)
@@ -360,20 +362,34 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                 if (loaded_settings.controller_mode != HOJA_CONTROLLER_MODE_DINPUT)
                 {
                     loaded_settings.controller_mode = HOJA_CONTROLLER_MODE_DINPUT;
-                    hoja_settings_saveall();
+                    save_flag = true;
                 }
+            }
+
+            if (loaded_settings.controller_mode == HOJA_CONTROLLER_MODE_RETRO)
+            {
+                ESP_LOGI(TAG, "Starting N64 Cold boot operation...");
+                core_joybus_n64_coldboot();
+                util_battery_set_charge_rate(35);
+            }
+
+            if (save_flag)
+            {
+                hoja_settings_saveall();
             }
 
             boot_anim();
             led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
-            
-            // Get boot mode and it will perform a callback.
-            err = util_battery_boot_status();
-            if (err != HOJA_OK)
-            {
-                ESP_LOGE(TAG, "Issue when getting boot battery status.");
-            }
 
+            if (loaded_settings.controller_mode != HOJA_CONTROLLER_MODE_RETRO)
+            {
+                // Get boot mode and it will perform a callback.
+                err = util_battery_boot_status();
+                if (err != HOJA_OK)
+                {
+                    ESP_LOGE(TAG, "Issue when getting boot battery status.");
+                }
+            }
         }
             break;
         
@@ -507,27 +523,37 @@ void local_wired_evt(hoja_wired_event_t evt)
             mode_color_array_ptr = COLOR_PRESET_SFC;
             led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
             err = hoja_start_core();
-
             break;
 
-        case HEVT_WIRED_JOYBUS_DETECT:
-            hoja_set_core(HOJA_CORE_GC);
+        case HEVT_WIRED_GAMECUBE_DETECT:
+            hoja_set_core(HOJA_CORE_GAMECUBE);
             mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
             led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
             err = hoja_start_core();
-
             break;
-    }
 
-    if (err != HOJA_OK)
-    {
-        ESP_LOGE(TAG, "Failed to start retro core.");
-        enter_sleep();
-    }
-    else
-    {
-        ESP_LOGI(TAG, "Started retro core OK.");
-        rgb_show();
+        case HEVT_WIRED_N64_DETECT:
+            mode_color_array_ptr = COLOR_PRESET_REALITY;
+            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
+            break;
+
+        case HEVT_WIRED_N64_DECONFIRMED:
+            err = util_wired_detect_loop();
+            if (err == HOJA_OK)
+            {
+                ESP_LOGI(TAG, "Started wired retro loop OK.");
+                led_animator_single(LEDANIM_BLINK_SLOW, COLOR_ORANGE);
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Failed to start wired retro loop.");
+            }
+            break;
+        
+        case HEVT_WIRED_DISCONNECT:
+            vTaskDelay(300/portTICK_PERIOD_MS);
+            enter_sleep();
+            break;
     }
 }
 
@@ -599,24 +625,6 @@ void local_boot_evt(hoja_boot_event_t evt)
 
             switch(loaded_settings.controller_mode)
             {
-                case HOJA_CONTROLLER_MODE_RETRO:
-                {
-                    util_battery_set_charge_rate(35);
-
-                    err = util_wired_detect_loop();
-                    if (!err)
-                    {
-                        ESP_LOGI(TAG, "Started wired retro loop OK.");
-                        mode_color.rgb = COLOR_ORANGE.rgb;
-                        led_animator_single(LEDANIM_BLINK_FAST, mode_color);
-                    }
-                    else
-                    {
-                        ESP_LOGE(TAG, "Failed to start wired retro loop.");
-                    }   
-                }
-                    break;
-
                 default:
                 case HOJA_CONTROLLER_MODE_DINPUT:
                 {
@@ -628,15 +636,6 @@ void local_boot_evt(hoja_boot_event_t evt)
                     mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
 
                     err = hoja_start_core();
-
-                    if (err == HOJA_OK)
-                    {
-
-                    }
-                    else
-                    {
-
-                    }
                 }
                     break;
 
@@ -724,25 +723,6 @@ void local_boot_evt(hoja_boot_event_t evt)
 
             switch(loaded_settings.controller_mode)
             {
-                case HOJA_CONTROLLER_MODE_RETRO:
-                {
-                    util_battery_set_charge_rate(35);
-
-                    err = util_wired_detect_loop();
-                    if (!err)
-                    {
-                        ESP_LOGI(TAG, "Started wired retro loop OK.");
-                        mode_color.rgb = COLOR_ORANGE.rgb;
-                        led_animator_single(LEDANIM_BLINK_FAST, mode_color);
-                    }
-                    else
-                    {
-                        ESP_LOGE(TAG, "Failed to start wired retro loop.");
-                    }   
-                    
-                }
-                    break;
-
                 default:
                 case HOJA_CONTROLLER_MODE_DINPUT:
                 {

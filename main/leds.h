@@ -15,6 +15,7 @@ extern rgb_s COLOR_PRESET_SFC[10];
 extern rgb_s COLOR_PRESET_XBOX[10];
 extern rgb_s COLOR_PRESET_SWITCH[10];
 extern rgb_s COLOR_PRESET_DOLPHIN[10];
+extern rgb_s COLOR_PRESET_REALITY[10];
 
 typedef enum
 {

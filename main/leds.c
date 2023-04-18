@@ -35,6 +35,10 @@ rgb_s COLOR_PRESET_DOLPHIN[10] = {{.rgb = 0x3ac9af}, {.rgb = 0xe63939}, {.rgb = 
                               {.rgb = 0x54585a}, {.rgb = 0x54585a}, 
                               {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}};
 
+rgb_s COLOR_PRESET_REALITY[10] = {{.rgb = 0x040fb4}, {.rgb = 0x008f2b}, {.rgb = 0xf5d400}, {.rgb = 0xf5d400},
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, 
+                              {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}, {.rgb = 0x54585a}};
+
 rgb_s *mode_color_array_ptr = COLOR_PRESET_SFC;
 //-------------//
 //-------------//
