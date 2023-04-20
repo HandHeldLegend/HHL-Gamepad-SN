@@ -883,6 +883,7 @@ void app_main()
     hoja_register_button_callback(local_button_cb);
     hoja_register_analog_callback(local_analog_cb);
     hoja_register_event_callback(local_event_cb);
+    hoja_button_remap_enable(true);
 
     xTaskCreate(local_get_battery_task, "BatTask", 2048, NULL, 3, &local_battery_TaskHandle);
 
