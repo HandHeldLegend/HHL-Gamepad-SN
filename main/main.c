@@ -278,8 +278,9 @@ void local_analog_cb()
     hoja_analog_data.rs_x = 2048;
     hoja_analog_data.rs_y = 2048;
 
-    hoja_analog_data.lt_a = 0;
-    hoja_analog_data.rt_a = 0;
+    // Set analog triggers
+    hoja_analog_data.lt_a = (hoja_button_data.trigger_l) ? DPAD_ANALOG_POS : 0;
+    hoja_analog_data.rt_a = (hoja_button_data.trigger_r) ? DPAD_ANALOG_POS : 0;
 }
 
 // Handle System events
@@ -521,19 +522,29 @@ void local_wired_evt(hoja_wired_event_t evt)
         case HEVT_WIRED_SNES_DETECT:
             hoja_set_core(HOJA_CORE_SNES);
             mode_color_array_ptr = COLOR_PRESET_SFC;
+            led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
             led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
             err = hoja_start_core();
             break;
 
         case HEVT_WIRED_GAMECUBE_DETECT:
-            hoja_set_core(HOJA_CORE_GAMECUBE);
+            
             mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
+            led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
+            vTaskDelay(150/portTICK_PERIOD_MS);
             led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
+            hoja_load_remap(gamecube_map.val);
+            hoja_set_dpad_mode(DPAD_MODE_ANALOGONLY);
+            hoja_set_core(HOJA_CORE_GAMECUBE);
+            
             err = hoja_start_core();
             break;
 
         case HEVT_WIRED_N64_DETECT:
             mode_color_array_ptr = COLOR_PRESET_REALITY;
+            hoja_load_remap(n64_map.val);
+            hoja_set_dpad_mode(DPAD_MODE_ANALOGONLY);
+            led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
             led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
             break;
 
@@ -542,7 +553,7 @@ void local_wired_evt(hoja_wired_event_t evt)
             if (err == HOJA_OK)
             {
                 ESP_LOGI(TAG, "Started wired retro loop OK.");
-                led_animator_single(LEDANIM_BLINK_SLOW, COLOR_ORANGE);
+                led_animator_single(LEDANIM_BLINK_FAST, COLOR_PURPLE);
             }
             else
             {
@@ -887,5 +898,6 @@ void app_main()
 
     xTaskCreate(local_get_battery_task, "BatTask", 2048, NULL, 3, &local_battery_TaskHandle);
 
+    hoja_button_remap_enable(true);
     err = hoja_init();
 }
