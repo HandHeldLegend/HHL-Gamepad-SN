@@ -1,6 +1,6 @@
 #include "main.h"
 
-// Main file for Open Controller Classic Edition example code. 
+// Main file for Open Controller Classic Edition example code.
 
 // Clear a value from high GPIO register (GPIO 32 and higher)
 // GPIO.out1_w1tc.val = (uint32_t) (GPIO_NUM-32);
@@ -19,7 +19,7 @@
 #define GPIO_BTN_SCAND      GPIO_NUM_32
 
 // Port pins for keypad config
-#define GPIO_BTN_PULLA      GPIO_NUM_33  
+#define GPIO_BTN_PULLA      GPIO_NUM_33
 #define GPIO_BTN_PULLB      GPIO_NUM_25
 #define GPIO_BTN_PULLC      GPIO_NUM_26
 #define GPIO_BTN_PULLD      GPIO_NUM_27
@@ -29,11 +29,11 @@
 #define GPIO_BTN_B          GPIO_BTN_SCANA
 #define GPIO_BTN_X          GPIO_BTN_SCANA
 #define GPIO_BTN_Y          GPIO_BTN_SCANA
-#define GPIO_BTN_DU         GPIO_BTN_SCAND 
+#define GPIO_BTN_DU         GPIO_BTN_SCAND
 #define GPIO_BTN_DL         GPIO_BTN_SCAND
 #define GPIO_BTN_DD         GPIO_BTN_SCAND
 #define GPIO_BTN_DR         GPIO_BTN_SCAND
-#define GPIO_BTN_L          GPIO_BTN_SCANC    
+#define GPIO_BTN_L          GPIO_BTN_SCANC
 #define GPIO_BTN_ZL         GPIO_BTN_SCANC
 #define GPIO_BTN_R          GPIO_BTN_SCANC
 #define GPIO_BTN_ZR         GPIO_BTN_SCANC
@@ -77,7 +77,7 @@ void enter_reboot()
     esp_restart();
 }
 
-// Sleep mode should check the charge level every 30 seconds or so. 
+// Sleep mode should check the charge level every 30 seconds or so.
 void enter_sleep()
 {
     led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
@@ -116,7 +116,7 @@ void local_get_battery_task(void * params)
         int lvl = adc1_get_raw(ADC_BATTERY_LVL);
         //ESP_LOGI(TAG, "%d", (unsigned int) lvl);
         lvl = lvl - VOLTAGE_MIN_READ;
-        
+
         if (lvl > 255)
         {
             lvl = 255;
@@ -194,7 +194,7 @@ void local_button_cb()
     // Read the GPIO registers and mask the data
     regread_low = REG_READ(GPIO_IN_REG) & GPIO_INPUT_PIN_MASK;
     regread_high = REG_READ(GPIO_IN1_REG);
-    
+
     // Release port A
     GPIO.out1_w1ts.val = (uint32_t) (1ULL << 1);
 
@@ -279,8 +279,8 @@ void local_analog_cb()
     hoja_analog_data.rs_y = 2048;
 
     // Set analog triggers
-    hoja_analog_data.lt_a = (hoja_button_data.trigger_l) ? DPAD_ANALOG_POS : 0;
-    hoja_analog_data.rt_a = (hoja_button_data.trigger_r) ? DPAD_ANALOG_POS : 0;
+    hoja_analog_data.lt_a = (hoja_processed_buttons.trigger_zl) ? DPAD_ANALOG_POS : 0;
+    hoja_analog_data.rt_a = (hoja_processed_buttons.trigger_zr) ? DPAD_ANALOG_POS : 0;
 }
 
 // Handle System events
@@ -393,7 +393,7 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
             }
         }
             break;
-        
+
         // Called when shutdown triggers from input loop
         case HEVT_API_SHUTDOWN:
         {
@@ -401,7 +401,7 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
             enter_sleep();
         }
             break;
-        
+
         // Called when reboot is requested
         case HEVT_API_REBOOT:
         {
@@ -481,7 +481,7 @@ void local_bt_evt(hoja_bt_event_t evt)
 
         case HEVT_BT_DISCONNECTED:
             ESP_LOGI(TAG, "BT Device Disconnected.");
-            
+
             break;
     }
 }
@@ -518,7 +518,7 @@ void local_wired_evt(hoja_wired_event_t evt)
         case HEVT_WIRED_NO_DETECT:
             err = HOJA_FAIL;
             break;
-        
+
         case HEVT_WIRED_SNES_DETECT:
             hoja_set_core(HOJA_CORE_SNES);
             mode_color_array_ptr = COLOR_PRESET_SFC;
@@ -528,7 +528,7 @@ void local_wired_evt(hoja_wired_event_t evt)
             break;
 
         case HEVT_WIRED_GAMECUBE_DETECT:
-            
+
             mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
             led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
             vTaskDelay(150/portTICK_PERIOD_MS);
@@ -536,7 +536,7 @@ void local_wired_evt(hoja_wired_event_t evt)
             hoja_load_remap(gamecube_map.val);
             hoja_set_dpad_mode(DPAD_MODE_ANALOGONLY);
             hoja_set_core(HOJA_CORE_GAMECUBE);
-            
+
             err = hoja_start_core();
             break;
 
@@ -560,7 +560,7 @@ void local_wired_evt(hoja_wired_event_t evt)
                 ESP_LOGE(TAG, "Failed to start wired retro loop.");
             }
             break;
-        
+
         case HEVT_WIRED_DISCONNECT:
             vTaskDelay(300/portTICK_PERIOD_MS);
             enter_sleep();
@@ -668,7 +668,7 @@ void local_boot_evt(hoja_boot_event_t evt)
                     }
                 }
                     break;
-                
+
                 case HOJA_CONTROLLER_MODE_NS:
                 {
                     util_battery_set_charge_rate(100);
@@ -714,8 +714,8 @@ void local_boot_evt(hoja_boot_event_t evt)
                 }
                 led_animator_single(LEDANIM_BLINK_SLOW, charge_color);
             }
-            
-            
+
+
         }
             break;
 
@@ -748,7 +748,7 @@ void local_boot_evt(hoja_boot_event_t evt)
 
                     if (err == HOJA_OK)
                     {
-                        ESP_LOGI(TAG, "Started BT Dinput OK.");      
+                        ESP_LOGI(TAG, "Started BT Dinput OK.");
                     }
                     else
                     {
@@ -802,7 +802,7 @@ void local_boot_evt(hoja_boot_event_t evt)
                 }
                     break;
             }
-            
+
         }
             break;
     }
@@ -810,7 +810,7 @@ void local_boot_evt(hoja_boot_event_t evt)
 
 // Callback to handle HOJA events
 void local_event_cb(hoja_event_type_t type, uint8_t evt, uint8_t param)
-{   
+{
     const char* TAG = "local_event_cb";
 
     switch(type)
