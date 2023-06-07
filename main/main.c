@@ -333,13 +333,44 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                 }
             }
 
+            if (loaded_settings.controller_mode == HOJA_CONTROLLER_MODE_RETRO)
+            {
+                loaded_settings.controller_mode = HOJA_CONTROLLER_MODE_NS;
+                save_flag = true;
+            }
+
             // Check to see what buttons are being held. Adjust state accordingly.
-            if (hoja_button_data.button_left)
+            if (hoja_button_data.dpad_down || hoja_button_data.dpad_left || hoja_button_data.dpad_right)
             {
                 if (loaded_settings.controller_mode != HOJA_CONTROLLER_MODE_RETRO)
                 {
                     loaded_settings.controller_mode = HOJA_CONTROLLER_MODE_RETRO;
-                    save_flag = true;
+                }
+
+                util_battery_set_charge_rate(35);
+
+                if (hoja_button_data.dpad_left) // NES/SNES
+                {
+                    hoja_set_core(HOJA_CORE_SNES);
+
+                    err = hoja_start_core();
+                }
+                else if (hoja_button_data.dpad_down) // N64
+                {
+
+                    hoja_load_remap(n64_map.val);
+                    hoja_set_dpad_mode(DPAD_MODE_ANALOGONLY);
+                    hoja_set_core(HOJA_CORE_N64);
+                    err = hoja_start_core();
+                }
+                else if (hoja_button_data.dpad_right) // GameCube
+                {
+                    vTaskDelay(150/portTICK_PERIOD_MS);
+                    hoja_load_remap(gamecube_map.val);
+                    hoja_set_dpad_mode(DPAD_MODE_ANALOGONLY);
+                    hoja_set_core(HOJA_CORE_GAMECUBE);
+
+                    err = hoja_start_core();
                 }
             }
             else if (hoja_button_data.button_right)
@@ -367,13 +398,6 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                 }
             }
 
-            if (loaded_settings.controller_mode == HOJA_CONTROLLER_MODE_RETRO)
-            {
-                ESP_LOGI(TAG, "Starting N64 Cold boot operation...");
-                core_joybus_n64_coldboot();
-                util_battery_set_charge_rate(35);
-            }
-
             if (save_flag)
             {
                 hoja_settings_saveall();
@@ -389,6 +413,27 @@ void local_system_evt(hoja_system_event_t evt, uint8_t param)
                 if (err != HOJA_OK)
                 {
                     ESP_LOGE(TAG, "Issue when getting boot battery status.");
+                }
+            }
+            else
+            {
+                switch(hoja_current_core)
+                {
+                    default:
+                    case HOJA_CORE_SNES:
+                        mode_color_array_ptr = COLOR_PRESET_SFC;
+                        led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
+                        break;
+
+                    case HOJA_CORE_N64:
+                        mode_color_array_ptr = COLOR_PRESET_REALITY;
+                        led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
+                        break;
+
+                    case HOJA_CORE_GAMECUBE:
+                        mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
+                        led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
+                        break;
                 }
             }
         }
@@ -520,32 +565,15 @@ void local_wired_evt(hoja_wired_event_t evt)
             break;
 
         case HEVT_WIRED_SNES_DETECT:
-            hoja_set_core(HOJA_CORE_SNES);
-            mode_color_array_ptr = COLOR_PRESET_SFC;
-            led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
-            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
-            err = hoja_start_core();
+
             break;
 
         case HEVT_WIRED_GAMECUBE_DETECT:
 
-            mode_color_array_ptr = COLOR_PRESET_DOLPHIN;
-            led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
-            vTaskDelay(150/portTICK_PERIOD_MS);
-            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
-            hoja_load_remap(gamecube_map.val);
-            hoja_set_dpad_mode(DPAD_MODE_ANALOGONLY);
-            hoja_set_core(HOJA_CORE_GAMECUBE);
-
-            err = hoja_start_core();
             break;
 
         case HEVT_WIRED_N64_DETECT:
-            mode_color_array_ptr = COLOR_PRESET_REALITY;
-            hoja_load_remap(n64_map.val);
-            hoja_set_dpad_mode(DPAD_MODE_ANALOGONLY);
-            led_animator_single(LEDANIM_FADETO, COLOR_BLACK);
-            led_animator_array(LEDANIM_FADETO, mode_color_array_ptr);
+
             break;
 
         case HEVT_WIRED_N64_DECONFIRMED:
